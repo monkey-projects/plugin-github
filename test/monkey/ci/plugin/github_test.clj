@@ -44,7 +44,7 @@
                                           (reset! inv true)
                                           (if (= {:org "test-org"
                                                   :repo "test-repo"
-                                                  :name "0.1.0"
+                                                  :name "v0.1.0"
                                                   :tag "0.1.0"}
                                                  (select-keys opts [:org :repo :name :tag]))
                                             {:status 201}
@@ -54,13 +54,13 @@
 
   (testing "formats name"
     (let [r (sut/release-job {:token "test-token"
-                              :name-format "v%s"})
+                              :name-format "version %s"})
           ctx {:build
                {:git
                 {:ref "refs/tags/0.1.0"}}}
           job (r ctx)]
       (with-redefs [sut/create-release! (fn [client opts]
-                                          (if (= "v0.1.0" (:name opts))
+                                          (if (= "version 0.1.0" (:name opts))
                                             {:status 201}
                                             {:status 400}))]
         (is (bc/success? @(j/execute! job ctx))))))

@@ -1,1 +1,2 @@
-{:deps {com.monkeyci/plugin-clj {:mvn/version "0.2.0"}}}
+{:deps {com.monkeyci/plugin-clj {:mvn/version "0.2.0"}
+        com.monkeycy/plugin-github {:mvn/version "0.1.0-SNAPSHOT"}}}

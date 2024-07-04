@@ -35,7 +35,7 @@
              (first)
              (rest))))
 
-(defn format-tag [tag {:keys [name-format]}]
+(defn format-tag [tag {:keys [name-format] :or {name-format "v%s"}}]
   (if name-format
     (format name-format tag)
     tag))
