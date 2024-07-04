@@ -3,6 +3,6 @@
              [clj :as p]
              [github :as gh]]))
 
-(defn jobs [ctx]
-  (concat ((p/deps-library) ctx)
-          [(gh/release-job {:name-format "v%s"})]))
+[(p/deps-library)
+ (gh/release-job {:name-format "v%s"})]
+
