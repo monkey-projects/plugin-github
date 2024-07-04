@@ -29,7 +29,7 @@ tag name as release name, formatted using the configured format string.
 ```clojure
 ;; Job that will create a release in Github for the commit tag,
 ;; formatting the tag by prefixing it with a `v`.
-(gh/release-job {:format-name "v%s"})
+(gh/release-job {:name-format "v%s"})
 ```
 
 This job in turn invokes the `create-release!` function in Github.  This call

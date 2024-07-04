@@ -1,7 +1,9 @@
 (ns monkey.ci.plugin.github-test
   (:require [clojure.test :refer [deftest testing is]]
             [clj-github.test-helpers :as h]
-            [monkey.ci.build.core :as bc]
+            [monkey.ci.build
+             [api :as api]
+             [core :as bc]]
             [monkey.ci.jobs :as j]
             [monkey.ci.plugin.github :as sut]))
 
@@ -56,15 +58,51 @@
           ctx {:build
                {:git
                 {:ref "refs/tags/0.1.0"}}}
-          job (r ctx)
-          inv (atom false)]
+          job (r ctx)]
       (with-redefs [sut/create-release! (fn [client opts]
-                                          (reset! inv true)
                                           (if (= "v0.1.0" (:name opts))
                                             {:status 201}
                                             {:status 400}))]
-        (is (bc/success? @(j/execute! job ctx)))
-        (is (true? @inv))))))
+        (is (bc/success? @(j/execute! job ctx))))))
+
+  (testing "uses provided token"
+    (let [r (sut/release-job {:token "test-token"})
+          ctx {:build
+               {:git
+                {:ref "refs/tags/0.1.0"
+                 :url "https://github.com/test-org/test-repo.git"}}}
+          job (r ctx)]
+      (with-redefs [sut/create-release! (fn [client opts]
+                                          (if (= "test-token" ((:token-fn client)))
+                                            {:status 201}
+                                            {:status 400}))]
+        (is (bc/success? @(j/execute! job ctx))))))
+
+  (testing "uses `github-token` build param"
+    (let [r (sut/release-job)
+          ctx {:build
+               {:git
+                {:ref "refs/tags/0.1.0"
+                 :url "https://github.com/test-org/test-repo.git"}}}
+          job (r ctx)]
+      (with-redefs [api/build-params (constantly {"github-token" "test-token"})
+                    sut/create-release! (fn [client opts]
+                                          (if (= "test-token" ((:token-fn client)))
+                                            {:status 201}
+                                            {:status 400}))]
+        (is (bc/success? @(j/execute! job ctx))))))
+
+  (testing "fails if no token provided"
+    (let [r (sut/release-job)
+          ctx {:build
+               {:git
+                {:ref "refs/tags/0.1.0"
+                 :url "https://github.com/test-org/test-repo.git"}}}
+          job (r ctx)
+          inv (atom false)]
+      (with-redefs [api/build-params {}
+                    sut/create-release! {:status 500 :body "Unexpected invocation"}]
+        (is (bc/failed? @(j/execute! job ctx)))))))
 
 (deftest parse-url
   (testing "parses https url"

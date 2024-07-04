@@ -1,7 +1,9 @@
 (ns monkey.ci.plugin.github
   "Provides functions for interacting with the Github API from a MonkeyCI build"
   (:require [clj-github.httpkit-client :as ghc]
-            [monkey.ci.build.core :as bc]))
+            [monkey.ci.build
+             [api :as api]
+             [core :as bc]]))
 
 (def make-client
   "Creates a new Github api client.  You can pass in a token, or api key with secret."
@@ -38,26 +40,33 @@
     (format name-format tag)
     tag))
 
+(def token-param "github-token")
+
 (defn release-job
   "Returns a fn that will in turn create a release job, if the conditions are met.
    By default a release will be created if the build is triggered from a tag, and
    the tag name is used to format the release name.  Note that either a `:token`
    must be specified, or a `github-token` build param must be provided."
-  [& [config]]
+  [& [{:keys [token] :as config}]]
   (fn [ctx]
-    (when-let [tag (bc/tag ctx)]
-      (bc/action-job
-       "github-release"
-       (fn [ctx]
-         (let [[org repo] (parse-url (get-in ctx [:build :git :url]))
-               {:keys [status]} (create-release!
-                                 (make-client {:token (:token config)})
-                                 {:org (get config :org org)
-                                  :repo (get config :repo repo)
-                                  :tag tag
-                                  :name (format-tag tag config)
-                                  :desc (:desc config)})]
-           (if (= 201 status)
-             bc/success
-             (-> bc/failure
-                 (bc/with-message (str "Unable to create release, got response: " status))))))))))
+    (letfn [(get-token-param []
+              (get (api/build-params ctx) token-param))]
+      (when-let [tag (bc/tag ctx)]
+        (bc/action-job
+         "github-release"
+         (fn [ctx]
+           (let [[org repo] (parse-url (get-in ctx [:build :git :url]))
+                 {:keys [status]} (create-release!
+                                   ;; TODO Support more authentication methods
+                                   (make-client (if token
+                                                  {:token token}
+                                                  {:token-fn get-token-param}))
+                                   {:org (get config :org org)
+                                    :repo (get config :repo repo)
+                                    :tag tag
+                                    :name (format-tag tag config)
+                                    :desc (:desc config)})]
+             (if (= 201 status)
+               bc/success
+               (-> bc/failure
+                   (bc/with-message (str "Unable to create release, got response: " status)))))))))))
