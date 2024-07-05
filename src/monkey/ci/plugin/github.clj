@@ -69,4 +69,5 @@
              (if (= 201 status)
                bc/success
                (-> bc/failure
-                   (bc/with-message (str "Unable to create release, got response: " status)))))))))))
+                   (bc/with-message (str "Unable to create release, got response: " status))))))
+         (select-keys config [:dependencies]))))))

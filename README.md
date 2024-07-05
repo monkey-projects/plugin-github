@@ -41,6 +41,21 @@ fail.
 The jobs usually run inside the build script itself, so they don't need
 to start a new container, and are very fast.
 
+The `release-job` function accepts these options:
+|Option|Default|Meaning|
+|---|---|---|
+|`name-format`|`v%s`|How the release name is formatted using the tag name|
+|`dependencies`||Optional dependencies for the job|
+|`org`|Build org|The organisation to use when calling Github.  Defaults to the organisation extracted from the repository url.|
+|`repo`|Build repo|The repository to create the release on.  Defaults to the configured MonkeyCI repo.|
+|`desc`||Optional description for the release|
+|`token`|`github-token` param or `GITHUB_TOKEN` env|The token to use to authenticate to Github.|
+
+## TODO
+
+ - As soon as MonkeyCI supports it, we should allow invoking the MonkeyCI API to create the release.
+ - Allow using app config (client id and secret) to authenticate to Github.
+
 ## License
 
 Copyright (c) 2024 by [Monkey Projects](https://www.monkey-projects.be)
