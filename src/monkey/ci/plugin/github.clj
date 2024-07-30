@@ -1,6 +1,7 @@
 (ns monkey.ci.plugin.github
   "Provides functions for interacting with the Github API from a MonkeyCI build"
   (:require [clj-github.httpkit-client :as ghc]
+            [medley.core :as mc]
             [monkey.ci.build
              [api :as api]
              [core :as bc]]))
@@ -19,10 +20,11 @@
   [c {:keys [org repo tag name desc target]}]
   (ghc/request c {:path (format "/repos/%s/%s/releases" org repo)
                   :method :post
-                  :body {:tag_name tag
-                         :target_commitish target
-                         :name name
-                         :body desc}}))
+                  :body (->> {:tag_name tag
+                              :target_commitish target
+                              :name name
+                              :body desc}
+                             (mc/filter-vals some?))}))
 
 (defn parse-url
   "Parses git url to extract org and repo"

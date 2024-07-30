@@ -1,5 +1,6 @@
 (ns monkey.ci.plugin.github-test
   (:require [clojure.test :refer [deftest testing is]]
+            [cheshire.core :as json]
             [clj-github.test-helpers :as h]
             [monkey.ci.build
              [api :as api]
@@ -10,6 +11,20 @@
 (deftest create-release!
   (testing "sends `post` to release endpoint"
     (h/with-fake-github ["/repos/test-org/test-repo/releases" {:status 201}]
+      (let [client (sut/make-client {:token "test-token"})]
+        (is (= 201 (-> (sut/create-release! client {:org "test-org"
+                                                    :repo "test-repo"
+                                                    :tag "test-tag"})
+                       :status))))))
+
+  (testing "does not send `nil` values"
+    (h/with-fake-github [(fn [req]
+                           (->> req
+                                :body
+                                (json/parse-string)
+                                vals
+                                (not-any? nil?)))
+                         {:status 201}]
       (let [client (sut/make-client {:token "test-token"})]
         (is (= 201 (-> (sut/create-release! client {:org "test-org"
                                                     :repo "test-repo"
