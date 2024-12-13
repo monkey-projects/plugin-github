@@ -1,6 +1,8 @@
 (ns monkey.ci.plugin.github
   "Provides functions for interacting with the Github API from a MonkeyCI build"
-  (:require [clj-github.httpkit-client :as ghc]
+  (:require [clj-github
+             [changeset :as cs]
+             [httpkit-client :as ghc]]
             [medley.core :as mc]
             [monkey.ci.build
              [api :as api]
@@ -44,6 +46,18 @@
 
 (def token-param "github-token")
 
+(defn github-job
+  "Template that invokes a target fn using a github client created from context."
+  [token f]
+  (fn [ctx]
+    (letfn [(get-token-param []
+              (get (api/build-params ctx) token-param))]
+      ;; TODO Support more authentication methods
+      (let [client (make-client (if token
+                                  {:token token}
+                                  {:token-fn get-token-param}))]
+        (f client ctx)))))
+
 (defn release-job
   "Returns a fn that will in turn create a release job, if the conditions are met.
    By default a release will be created if the build is triggered from a tag, and
@@ -56,20 +70,48 @@
       (when-let [tag (bc/tag ctx)]
         (bc/action-job
          "github-release"
-         (fn [ctx]
-           (let [[org repo] (parse-url (get-in ctx [:build :git :url]))
-                 {:keys [status]} (create-release!
-                                   ;; TODO Support more authentication methods
-                                   (make-client (if token
-                                                  {:token token}
-                                                  {:token-fn get-token-param}))
-                                   {:org (get config :org org)
-                                    :repo (get config :repo repo)
-                                    :tag tag
-                                    :name (format-tag tag config)
-                                    :desc (:desc config)})]
-             (if (= 201 status)
-               bc/success
-               (-> bc/failure
-                   (bc/with-message (str "Unable to create release, got response: " status))))))
+         (github-job
+          token
+          (fn [client _]
+            (let [[org repo] (parse-url (get-in ctx [:build :git :url]))
+                  {:keys [status]} (create-release!
+                                    client
+                                    {:org (get config :org org)
+                                     :repo (get config :repo repo)
+                                     :tag tag
+                                     :name (format-tag tag config)
+                                     :desc (:desc config)})]
+              (if (= 201 status)
+                bc/success
+                (-> bc/failure
+                    (bc/with-message (str "Unable to create release, got response: " status)))))))
          (select-keys config [:dependencies]))))))
+
+(defn make-changeset [c {:keys [org repo branch]}]
+  (cs/from-branch! c org repo branch))
+
+(defn patch-file
+  "Patches file indicated by given location by applying `f` to it with arguments.
+   A new commit is created on the specific branch with the given commit msg."
+  [client {:keys [path commit-msg] :as opts} f & args]
+  (letfn [(apply-patch [cs]
+            (cs/update-content cs path #(apply f % args)))]
+    (some-> (make-changeset client opts)
+            (apply-patch)
+            (cs/commit! commit-msg)
+            (cs/update-branch!))))
+
+(defn patch-job [{:keys [job-id token org repo branch patcher]
+                  :or {job-id "patch"
+                       branch "main"}
+                  :as opts}]
+  (bc/action-job
+   job-id
+   (github-job
+     token
+     (fn [client ctx]
+       (if (patch-file client
+                       (select-keys opts [:path :commit-msg])
+                       patcher)
+         bc/success
+         bc/failure)))))

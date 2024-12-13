@@ -1,11 +1,15 @@
 (ns monkey.ci.plugin.github-test
   (:require [clojure.test :refer [deftest testing is]]
             [cheshire.core :as json]
-            [clj-github.test-helpers :as h]
+            [clj-github
+             [changeset :as cs]
+             [test-helpers :as h]]
+            [clojure.string :as s]
             [monkey.ci.build
              [api :as api]
              [core :as bc]]
             [monkey.ci.jobs :as j]
+            [monkey.ci.test :as mt]
             [monkey.ci.plugin.github :as sut]))
 
 (deftest create-release!
@@ -140,3 +144,45 @@
   (testing "`nil` on invalid url"
     (is (nil? (sut/parse-url "http://invalid")))
     (is (nil? (sut/parse-url nil)))))
+
+(deftest patch-file
+  (testing "downloads file, applies arg fn to it and commits the changes"
+    (let [path "path/to/file"]
+      (with-redefs [cs/from-branch!
+                    (constantly {:base-revision ::test-changeset})
+                    
+                    cs/get-content
+                    (constantly "original file contents")
+                    
+                    cs/put-content
+                    (fn [cs p content]
+                      (when (and (= "updated file contents" content)
+                                 (= p path))
+                        {:base-revision ::new-changeset}))
+                    
+                    cs/update-branch!
+                    identity]
+        (is (= ::new-changeset
+               (-> (sut/patch-file
+                    (sut/make-client {:token "test-token"})
+                    {:org "test-org"
+                     :repo "test-repo"
+                     :branch "test-branch"
+                     :path path}
+                    s/replace #"^original" "updated")
+                   :base-revision)))))))
+
+(deftest patch-job
+  (testing "creates action job"
+    (is (bc/action-job? (sut/patch-job {:path "test/file"}))))
+
+  (testing "applies patcher to file at location"
+    (let [job (sut/patch-job {:path "test/file"
+                              :patcher (constantly "patched")})
+          ctx mt/test-ctx
+          patches (atom [])]
+      (with-redefs [sut/patch-file (fn [_ opts _]
+                                     (swap! patches conj opts))]
+        (mt/with-build-params {}
+          (is (bc/success? @(j/execute! job ctx)))
+          (is (= 1 (count @patches))))))))
