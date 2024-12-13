@@ -51,6 +51,34 @@ The `release-job` function accepts these options:
 |`desc`||Optional description for the release|
 |`token`|`github-token` param or `GITHUB_TOKEN` env|The token to use to authenticate to Github.|
 
+### patch-job
+
+The `patch-job` can be used to patch a file in another Github repo.  You're free to patch
+files in the same repo, but this can lead to an infinite build loop.  Patching files can be
+useful when you have an *infrastructure as code* system and you want to auto-deploy a container
+image that you just built.
+
+```clojure
+(gh/patch-job {:org "my-org"
+               :repo "my-repo"
+	       :branch "main"
+	       :path "path/to/file"
+	       :patcher (fn [txt]
+	                  "this is the new file contents")
+	       :commit-msg "File updated by build"})
+```
+
+The `patch-job` function accepts these options:
+|Option|Default|Meaning|
+|---|---|---|
+|`path`||The path to the file to patch (required)|
+|`patcher`||The 1-arity function that receives the original file contents and returns the new contents|
+|`dependencies`||Optional dependencies for the job|
+|`org`|Build org|The organisation to use when calling Github.  Defaults to the organisation extracted from the repository url.|
+|`repo`|Build repo|The repository to create the release on.  Defaults to the configured MonkeyCI repo.|
+|`commit-msg`||The commit message to use|
+|`token`|`github-token` param or `GITHUB_TOKEN` env|The token to use to authenticate to Github.|
+
 ## TODO
 
  - As soon as MonkeyCI supports it, we should allow invoking the MonkeyCI API to create the release.

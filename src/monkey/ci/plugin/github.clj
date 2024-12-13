@@ -101,10 +101,13 @@
             (cs/commit! commit-msg)
             (cs/update-branch!))))
 
-(defn patch-job [{:keys [job-id token org repo branch patcher]
-                  :or {job-id "patch"
-                       branch "main"}
-                  :as opts}]
+(defn patch-job
+  "Creates a job that patches a file in a Github repo.  The patcher function receives the
+   file contents as argument, and is expected to return the new file contents."
+  [{:keys [job-id token org repo branch patcher]
+    :or {job-id "patch"
+         branch "main"}
+    :as opts}]
   (bc/action-job
    job-id
    (github-job
@@ -114,4 +117,5 @@
                        (select-keys opts [:path :commit-msg])
                        patcher)
          bc/success
-         bc/failure)))))
+         bc/failure)))
+   (select-keys opts [:dependencies])))
