@@ -78,6 +78,7 @@ The `patch-job` function accepts these options:
 |`repo`|Build repo|The repository to create the release on.  Defaults to the configured MonkeyCI repo.|
 |`commit-msg`||The commit message to use|
 |`token`|`github-token` param or `GITHUB_TOKEN` env|The token to use to authenticate to Github.|
+|`job-id`|`patch`|The id of the job|
 
 ## TODO
 

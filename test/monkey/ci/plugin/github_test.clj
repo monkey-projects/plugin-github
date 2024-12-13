@@ -178,6 +178,9 @@
 
   (testing "applies patcher to file at location"
     (let [job (sut/patch-job {:path "test/file"
+                              :org "test-org"
+                              :repo "test-repo"
+                              :branch "test-branch"
                               :patcher (constantly "patched")})
           ctx mt/test-ctx
           patches (atom [])]
@@ -185,4 +188,8 @@
                                      (swap! patches conj opts))]
         (mt/with-build-params {}
           (is (bc/success? @(j/execute! job ctx)))
-          (is (= 1 (count @patches))))))))
+          (is (= 1 (count @patches)))
+          (is (= {:org "test-org"
+                  :repo "test-repo"
+                  :branch "test-branch"}
+                 (select-keys (first @patches) [:org :repo :branch]))))))))

@@ -88,6 +88,7 @@
          (select-keys config [:dependencies]))))))
 
 (defn make-changeset [c {:keys [org repo branch]}]
+  ;; TODO Check params because the error thrown if a param is nil is cryptic
   (cs/from-branch! c org repo branch))
 
 (defn patch-file
@@ -114,7 +115,7 @@
      token
      (fn [client ctx]
        (if (patch-file client
-                       (select-keys opts [:path :commit-msg])
+                       (dissoc opts :patcher)
                        patcher)
          bc/success
          bc/failure)))
