@@ -114,9 +114,14 @@
    (github-job
      token
      (fn [client ctx]
-       (if (patch-file client
-                       (dissoc opts :patcher)
-                       patcher)
-         bc/success
-         bc/failure)))
+       (try
+         (if (patch-file client
+                         (dissoc opts :patcher)
+                         patcher)
+           bc/success
+           bc/failure)
+         (catch Exception ex
+           ;; Print response
+           (println "Github request failed:" (:response (ex-data ex)))
+           (bc/with-message bc/failure (ex-message ex))))))
    (select-keys opts [:dependencies])))
