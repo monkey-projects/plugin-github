@@ -73,18 +73,25 @@
          (github-job
           token
           (fn [client _]
-            (let [[org repo] (parse-url (get-in ctx [:build :git :url]))
-                  {:keys [status]} (create-release!
-                                    client
-                                    {:org (get config :org org)
-                                     :repo (get config :repo repo)
-                                     :tag tag
-                                     :name (format-tag tag config)
-                                     :desc (:desc config)})]
-              (if (= 201 status)
-                bc/success
-                (-> bc/failure
-                    (bc/with-message (str "Unable to create release, got response: " status)))))))
+            (try
+              (let [[org repo] (parse-url (get-in ctx [:build :git :url]))
+                    {:keys [status]} (create-release!
+                                      client
+                                      {:org (get config :org org)
+                                       :repo (get config :repo repo)
+                                       :tag tag
+                                       :name (format-tag tag config)
+                                       :desc (:desc config)})]
+                (if (= 201 status)
+                  bc/success
+                  (-> bc/failure
+                      (bc/with-message (str "Unable to create release, got response: " status)))))
+              (catch Exception ex
+                (let [resp (:response (ex-data ex))]
+                  (println "Github error response:" (:body resp))
+                  (-> bc/failure
+                      (bc/with-message
+                        (str "Unable to create release, got response: " (:status resp)))))))))
          (select-keys config [:dependencies]))))))
 
 (defn make-changeset [c {:keys [org repo branch]}]

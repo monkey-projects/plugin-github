@@ -117,11 +117,27 @@
                {:git
                 {:ref "refs/tags/0.1.0"
                  :url "https://github.com/test-org/test-repo.git"}}}
-          job (r ctx)
-          inv (atom false)]
+          job (r ctx)]
       (with-redefs [api/build-params {}
                     sut/create-release! {:status 500 :body "Unexpected invocation"}]
         (is (bc/failed? @(j/execute! job ctx))))))
+
+  (testing "fails on backend exception"
+    (let [r (sut/release-job)
+          ctx {:build
+               {:git
+                {:ref "refs/tags/0.1.0"
+                 :url "https://github.com/test-org/test-repo.git"}}}
+          job (r ctx)]
+      (with-redefs [api/build-params {}
+                    sut/create-release! (fn [& _]
+                                         (throw (ex-info
+                                                 "Test error"
+                                                 {:response
+                                                  {:status 500 :body "Github error"}})))]
+        (let [r @(j/execute! job ctx)]
+          (is (bc/failed? r))
+          (is (s/includes? (:message r) "500"))))))
 
   (testing "adds dependencies"
     (let [r (sut/release-job {:dependencies ["other-job"]})
