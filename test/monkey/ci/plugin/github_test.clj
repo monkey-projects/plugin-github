@@ -161,6 +161,38 @@
     (is (nil? (sut/parse-url "http://invalid")))
     (is (nil? (sut/parse-url nil)))))
 
+(deftest patch-files
+  (testing "downloads each file, applies arg fn to it and commits the changes"
+    (with-redefs [cs/from-branch!
+                  (constantly {:base-revision ::test-changeset})
+                  
+                  cs/get-content
+                  (fn [_ p]
+                    (str "original file contents for " p))
+                  
+                  cs/put-content
+                  (fn [cs p content]
+                    (when (and (re-matches #"updated file contents for /path/to/file-.*" content)
+                               (re-matches #"/path/to/.*" p))
+                      {:base-revision ::new-changeset}))
+                  
+                  cs/update-branch!
+                  identity]
+      (letfn [(patch [c]
+                (s/replace c #"^original" "updated"))]
+        (is (= ::new-changeset
+               (-> (sut/patch-files
+                    (sut/make-client {:token "test-token"})
+                    {:org "test-org"
+                     :repo "test-repo"
+                     :branch "test-branch"
+                     :patches
+                     [{:path "/path/to/file-1"
+                       :patcher patch}
+                      {:path "/path/to/file-2"
+                       :patcher patch}]})
+                   :base-revision)))))))
+
 (deftest patch-file
   (testing "downloads file, applies arg fn to it and commits the changes"
     (let [path "path/to/file"]
@@ -192,20 +224,40 @@
   (testing "creates action job"
     (is (bc/action-job? (sut/patch-job {:path "test/file"}))))
 
-  (testing "applies patcher to file at location"
-    (let [job (sut/patch-job {:path "test/file"
-                              :org "test-org"
-                              :repo "test-repo"
-                              :branch "test-branch"
-                              :patcher (constantly "patched")})
-          ctx mt/test-ctx
-          patches (atom [])]
-      (with-redefs [sut/patch-file (fn [_ opts _]
-                                     (swap! patches conj opts))]
-        (mt/with-build-params {}
-          (is (bc/success? @(j/execute! job ctx)))
-          (is (= 1 (count @patches)))
-          (is (= {:org "test-org"
-                  :repo "test-repo"
-                  :branch "test-branch"}
-                 (select-keys (first @patches) [:org :repo :branch]))))))))
+  (testing "for single patch"
+    (testing "applies patcher to file at location"
+      (let [job (sut/patch-job {:path "test/file"
+                                :org "test-org"
+                                :repo "test-repo"
+                                :branch "test-branch"
+                                :patcher (constantly "patched")})
+            ctx mt/test-ctx
+            patches (atom [])]
+        (with-redefs [sut/patch-files (fn [_ opts]
+                                        (swap! patches conj opts))]
+          (mt/with-build-params {}
+            (is (bc/success? @(j/execute! job ctx)))
+            (is (= 1 (count @patches)))
+            (is (= {:org "test-org"
+                    :repo "test-repo"
+                    :branch "test-branch"}
+                   (select-keys (first @patches) [:org :repo :branch])))
+            (is (= 1 (-> @patches first :patches count))))))))
+
+  (testing "for multiple patches"
+    (testing "applies patches to files at location"
+      (let [job (sut/patch-job {:org "test-org"
+                                :repo "test-repo"
+                                :branch "test-branch"
+                                :patches [{:path "test/file"
+                                           :patcher (constantly "patched")}
+                                          {:path "other/file"
+                                           :patcher (constantly "patched again")}]})
+            ctx mt/test-ctx
+            patches (atom [])]
+        (with-redefs [sut/patch-files (fn [_ opts]
+                                        (swap! patches conj opts))]
+          (mt/with-build-params {}
+            (is (bc/success? @(j/execute! job ctx)))
+            (is (= 1 (count @patches)))
+            (is (= 2 (-> @patches first :patches count)))))))))

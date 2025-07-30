@@ -1,10 +1,10 @@
 {:deps {dev.nubank/clj-github {:mvn/version "0.8.1"}
-        com.monkeyci/app {:mvn/version "0.17.1"}}
+        com.monkeyci/app {:mvn/version "0.19.2"}}
 
  :aliases
  {:test
   {:extra-deps {com.monkeyprojects/build {:mvn/version "0.3.1"}
-                com.monkeyci/test {:mvn/version "0.17.1"}
+                com.monkeyci/test {:mvn/version "0.19.2"}
                 http-kit.fake/http-kit.fake {:mvn/version "0.2.2"}}
    :extra-paths ["test"]
    :exec-fn monkey.test/all}

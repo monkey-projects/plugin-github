@@ -98,37 +98,54 @@
   ;; TODO Check params because the error thrown if a param is nil is cryptic
   (cs/from-branch! c org repo branch))
 
-(defn patch-file
-  "Patches file indicated by given location by applying `f` to it with arguments.
-   A new commit is created on the specific branch with the given commit msg."
-  [client {:keys [path commit-msg] :as opts} f & args]
-  (letfn [(apply-patch [cs]
-            (cs/update-content cs path #(apply f % args)))]
+(defn patch-files
+  "Patches multiple files, as indiciated in the `patches` option.  Each patch
+   contains a `path` and a `patcher` fn, which receives the file contents and
+   returns updated contents.  A single commit is created for the combined 
+   patches."
+  [client {:keys [commit-msg patches] :as opts}]
+  (letfn [(apply-patch [cs {:keys [path patcher]}]
+            (cs/update-content cs path patcher))
+          (apply-patches [cs]
+            (reduce apply-patch cs patches))]
     (some-> (make-changeset client opts)
-            (apply-patch)
+            (apply-patches)
             (cs/commit! commit-msg)
             (cs/update-branch!))))
 
+(defn patch-file
+  "Patches file indicated by given location by applying `f` to it with arguments.
+   A new commit is created on the specific branch with the given commit msg."
+  [client opts f & args]
+  (patch-files client
+               (-> opts
+                   (dissoc :path)
+                   (assoc :patches [{:path (:path opts)
+                                     :patcher (fn [c]
+                                                (apply f c args))}]))))
+
 (defn patch-job
-  "Creates a job that patches a file in a Github repo.  The patcher function receives the
-   file contents as argument, and is expected to return the new file contents."
-  [{:keys [job-id token org repo branch patcher]
+  "Creates a job that patches one or more files in a Github repo.  Either a
+   `path` and a `patcher` is given, or multiple `patches` are specified. The
+    patcher functions receive the file contents as argument, and are expected
+    to return the new file contents."
+  [{:keys [job-id token org repo branch]
     :or {job-id "patch"
          branch "main"}
     :as opts}]
   (bc/action-job
    job-id
    (github-job
-     token
-     (fn [client ctx]
-       (try
-         (if (patch-file client
-                         (dissoc opts :patcher)
-                         patcher)
-           bc/success
-           bc/failure)
-         (catch Exception ex
-           ;; Print response
-           (println "Github request failed:" (:response (ex-data ex)))
-           (bc/with-message bc/failure (ex-message ex))))))
+    token
+    (fn [client ctx]
+      (try
+        (let [opts (cond-> (dissoc opts :patcher :path)
+                     (:patcher opts) (assoc :patches [(select-keys opts [:patcher :path])]))]
+          (if (patch-files client opts)
+            bc/success
+            bc/failure))
+        (catch Exception ex
+          ;; Print response
+          (println "Github request failed:" (:response (ex-data ex)))
+          (bc/with-message bc/failure (ex-message ex))))))
    (select-keys opts [:dependencies])))
